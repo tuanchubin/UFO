@@ -188,11 +188,12 @@ function show(id){var a=document.querySelectorAll(".screen");for(var i=0;i<a.len
 function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
 
 /* ===== Trạng thái bài làm (chỉ trong bộ nhớ) ===== */
-var idx=0, answers=[], orders=[], lastScores=null, radarImg=null, lastBlob=null;
+var idx=0, answers=[], orders=[], qOrder=[], lastScores=null, radarImg=null, lastBlob=null;
 
 function resetState(){
-  idx=0;answers=[];orders=[];
-  for(var i=0;i<Q.length;i++){answers.push(null);orders.push(shuffle([0,1,2,3]))}
+  idx=0;answers=[];orders=[];qOrder=[];
+  for(var i=0;i<Q.length;i++){answers.push(null);orders.push(shuffle([0,1,2,3]));qOrder.push(i)}
+  qOrder=shuffle(qOrder);
 }
 
 /* ===== Chấm điểm ===== */
@@ -213,16 +214,16 @@ function computeScores(ans){
 
 /* ===== Màn hình câu hỏi ===== */
 function renderQ(){
-  var q=Q[idx];
+  var qi=qOrder[idx], q=Q[qi];
   $("pq").textContent="Câu "+(idx+1)+"/"+Q.length;
   var done=answers.filter(function(a){return a!==null}).length;
   var pct=Math.round(done/Q.length*100);
   $("pp").textContent=pct+"%";$("pbar").style.width=pct+"%";
   $("qtxt").textContent=q.q;
   var box=$("opts");box.innerHTML="";
-  orders[idx].forEach(function(lv){
+  orders[qi].forEach(function(lv){
     var b=document.createElement("button");
-    b.className="opt"+(answers[idx]===lv?" sel":"");
+    b.className="opt"+(answers[qi]===lv?" sel":"");
     b.textContent=q.o[lv];
     b.onclick=function(){choose(lv)};
     box.appendChild(b);
@@ -230,24 +231,25 @@ function renderQ(){
   $("bPrev").disabled=idx===0;
   var last=idx===Q.length-1;
   $("bNext").textContent=last?"Xem kết quả ✦":"Tiếp →";
-  $("bNext").disabled=answers[idx]===null;
+  $("bNext").disabled=answers[qi]===null;
   $("qmsg").textContent="";
 }
 function choose(lv){
-  var first=answers[idx]===null;
-  answers[idx]=lv;renderQ();
-  if(first&&idx<Q.length-1){setTimeout(function(){if(answers[idx]===lv){idx++;renderQ()}},320)}
+  var qi=qOrder[idx],at=idx,first=answers[qi]===null;
+  answers[qi]=lv;renderQ();
+  if(first&&idx<Q.length-1){setTimeout(function(){if(idx===at&&answers[qi]===lv){idx++;renderQ()}},320)}
 }
 function next(){
-  if(answers[idx]===null){$("qmsg").textContent="Hãy chọn một đáp án trước nhé.";return}
+  if(answers[qOrder[idx]]===null){$("qmsg").textContent="Hãy chọn một đáp án trước nhé.";return}
   if(idx<Q.length-1){idx++;renderQ();return}
-  var miss=answers.indexOf(null);
+  var miss=-1;
+  for(var m=0;m<qOrder.length;m++){if(answers[qOrder[m]]===null){miss=m;break}}
   if(miss!==-1){idx=miss;renderQ();$("qmsg").textContent="Bạn còn câu chưa trả lời. Hãy hoàn thành để xem kết quả.";return}
   finish();
 }
 
 /* ===== Vẽ kết quả lên CHÍNH ảnh radar gốc ===== */
-var PAD_L=100,PAD_R=100,PAD_T=150,PAD_B=230;
+var PAD_L=40,PAD_R=40,PAD_T=40,PAD_B=40;
 var CW=IMG_W+PAD_L+PAD_R, CH=IMG_H+PAD_T+PAD_B;
 
 function sinPoint(i,p){
@@ -257,12 +259,6 @@ function drawResult(cv,scores){
   cv.width=CW;cv.height=CH;
   var c=cv.getContext("2d");
   c.fillStyle="#ffffff";c.fillRect(0,0,CW,CH);
-  /* tiêu đề trong phần khoảng trắng */
-  c.textAlign="center";c.textBaseline="alphabetic";
-  c.fillStyle="#7a0c1e";c.font="bold 58px Georgia,serif";
-  c.fillText(" ",CW/2,78);
-  c.fillStyle="#6b5a58";c.font="italic 30px Georgia,serif";
-  c.fillText("Thất Hình Đại Tội",CW/2,122);
   /* ảnh gốc, giữ nguyên kích thước/tỷ lệ, không crop */
   c.drawImage(radarImg,PAD_L,PAD_T,IMG_W,IMG_H);
   /* đa giác điểm */
@@ -276,19 +272,7 @@ function drawResult(cv,scores){
   c.fillStyle="rgba(255,70,95,0.30)";c.fill();
   c.globalCompositeOperation="source-over";
   c.lineJoin="round";c.lineCap="round";c.lineWidth=6;c.strokeStyle="#c1121f";c.stroke();
-  c.fillStyle="#c1121f";
-  for(var d=0;d<7;d++){c.beginPath();c.arc(pts[d][0],pts[d][1],8,0,Math.PI*2);c.fill()}
   c.restore();
-  /* bảng điểm ở khoảng trắng phía dưới */
-  var y0=PAD_T+IMG_H+50, colW=CW/4;
-  c.textAlign="center";
-  for(var s=0;s<7;s++){
-    var col=s<4?s:s-4, row=s<4?0:1;
-    var cx=s<4?colW*(col+.5):CW/2+(col-1)*colW;
-    var cy=y0+row*80;
-    c.fillStyle="#333";c.font="30px Georgia,serif";c.fillText(SINS[s],cx,cy);
-    c.fillStyle="#c1121f";c.font="bold 36px Georgia,serif";c.fillText(scores[s]+"%",cx,cy+40);
-  }
 }
 
 function extremes(sc){
